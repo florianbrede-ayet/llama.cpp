@@ -1463,6 +1463,7 @@ json convert_anthropic_to_oai(const json & body) {
             json tool_calls = json::array();
             json converted_content = json::array();
             json tool_results = json::array();
+            std::string thinking_content;
             bool has_tool_calls = false;
 
             for (const auto & block : content) {
@@ -1470,6 +1471,15 @@ json convert_anthropic_to_oai(const json & body) {
 
                 if (type == "text") {
                     converted_content.push_back(block);
+                } else if (type == "thinking") {
+                    // Preserve thinking/reasoning content for thinking-capable models
+                    std::string thinking_text = json_value(block, "thinking", std::string());
+                    if (!thinking_text.empty()) {
+                        if (!thinking_content.empty()) {
+                            thinking_content += "\n";
+                        }
+                        thinking_content += thinking_text;
+                    }
                 } else if (type == "image") {
                     json source = json_value(block, "source", json::object());
                     std::string source_type = json_value(source, "type", std::string());
@@ -1528,12 +1538,15 @@ json convert_anthropic_to_oai(const json & body) {
                 }
             }
 
-            if (!converted_content.empty() || has_tool_calls) {
+            if (!converted_content.empty() || has_tool_calls || !thinking_content.empty()) {
                 json new_msg = {{"role", role}};
                 if (!converted_content.empty()) {
                     new_msg["content"] = converted_content;
                 } else if (has_tool_calls) {
                     new_msg["content"] = "";
+                }
+                if (!thinking_content.empty()) {
+                    new_msg["reasoning_content"] = thinking_content;
                 }
                 if (!tool_calls.empty()) {
                     new_msg["tool_calls"] = tool_calls;
